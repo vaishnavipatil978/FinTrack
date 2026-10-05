@@ -1,117 +1,51 @@
 # FinTrack
 
-A production-grade personal finance management API: accounts, transactions,
-transfers, budgets, goals, recurring transactions, CSV import, and
-reporting — built with FastAPI, PostgreSQL, and Redis as a modular
-monolith.
+A personal finance management API: multi-account ledgers, transactions,
+transfers, category budgets, savings goals, recurring transactions, CSV
+import, reporting, and admin tooling — built with FastAPI, PostgreSQL,
+and Redis as a modular monolith.
 
-> **Status**: Stages 1-16 complete, plus a production-readiness pass:
-> admin tooling (`FR-ADMIN-01/02/03`), a dependency vulnerability scan
-> (`pip-audit`, clean), and a real Locust load test against the local
-> stack have all been added and verified. The application, tests,
-> background processing, observability, admin endpoints, and docs are
-> done and verified. **Not deployed anywhere** - no cloud account or
-> GitHub remote is reachable from this environment, so the CI workflow
-> has never run on a hosted runner. See
-> [`docs/production-readiness.md`](docs/production-readiness.md) for
-> the full, item-by-item status against the Definition of Done. See
-> [`docs/06-development-roadmap.md`](docs/06-development-roadmap.md) for
-> what's built vs. planned. This README is updated at the end of every
-> stage.
+> **Status**: Feature-complete and verified against a real PostgreSQL +
+> Redis + Celery stack, including admin tooling, a clean dependency
+> vulnerability scan (`pip-audit`), and a real Locust load test. 296
+> automated tests pass. **Not deployed anywhere** — there is no
+> provisioned cloud environment and the CI workflow has never run on a
+> hosted runner. See [`docs/production-readiness.md`](docs/production-readiness.md)
+> for the full, item-by-item status.
 
-## Project Overview
+## 1. What this project does
 
-FinTrack lets a user track money across multiple accounts, record income/
-expense/transfer activity with atomic ledger updates, set category
-budgets and savings goals, automate recurring transactions, import
-transaction history from CSV, and generate financial reports — all
-behind a secure, observable, well-tested REST API. Full requirements and
-design are in [`docs/`](docs/); see especially
-[`docs/01-product-requirements.md`](docs/01-product-requirements.md) for
-scope and [`docs/architecture/system-architecture.md`](docs/architecture/system-architecture.md)
-for the system design.
+FinTrack is the backend for a personal finance app. A user registers,
+creates one or more accounts (bank, cash, credit card, savings,
+investment, wallet), and then:
 
-No AI features. No microservices. A modular monolith, built in staged,
-reviewed increments — see the engineering rules in
-[`docs/06-development-roadmap.md`](docs/06-development-roadmap.md).
+- Records income, expense, and transfer transactions, with every
+  balance update happening atomically.
+- Sets a monthly budget per category and sees live utilization
+  (spent / limit) as transactions land.
+- Sets savings goals with a target amount and date, and gets back
+  progress percentage and the contribution still required to hit the
+  target on time.
+- Defines recurring transactions (e.g. rent on the 1st) that a
+  background worker turns into real transactions on schedule, exactly
+  once per occurrence — no duplicates even if the job is retried or
+  crashes mid-run.
+- Imports transaction history from a CSV file, with row-level
+  validation, a preview/confirm step, and duplicate detection.
+- Pulls monthly summaries, category breakdowns, account balances, and
+  a combined budgets/goals snapshot.
+- Gets in-app notifications when a budget is exceeded, a goal is
+  achieved, or a recurring transaction posts.
 
-## Features (Planned Scope)
+Administrators (a separate `role` on the user, not a separate app) can
+list/search users and lock or unlock an account, with every admin
+action recorded in an audit trail.
 
-- JWT auth with refresh-token rotation and reuse detection
-- Multi-account ledger (bank, cash, credit card, savings, investment, wallet)
-- Income / expense / transfer transactions with atomic balance updates
-- Category budgets with live utilization tracking
-- Financial goals with progress and required-contribution calculations
-- Idempotent recurring transactions via a background worker
-- CSV transaction import with preview, validation, and duplicate detection
-- Monthly financial reports and category breakdowns
-- In-app + pluggable email notifications
-- Append-only audit logging of sensitive actions
-- Redis-backed caching, rate limiting, and idempotency keys
-- Structured JSON logging, Prometheus metrics, liveness/readiness probes
+Everything an authenticated user does to their own money is isolated
+from everything every other user does — enforced at the database query
+level, not just checked in a router.
 
-## Architecture
-
-Layered modular monolith: **API (routers) → Service → Repository →
-PostgreSQL**, with Redis and a Celery worker as supporting infrastructure.
-Full diagrams and rationale: [`docs/architecture/`](docs/architecture/).
-
-```
-Client → Load Balancer → FastAPI (N replicas) → PostgreSQL
-                                ├── Redis (cache / rate limit / idempotency / broker)
-                                └── Celery Worker (recurring txns, large CSV import, notifications)
-```
-
-## Technology Stack
-
-| Concern | Choice |
-|---|---|
-| API framework | FastAPI (async), Pydantic v2 |
-| Database | PostgreSQL 16, SQLAlchemy 2.x (async), Alembic |
-| Cache / queue broker | Redis |
-| Background jobs | Celery |
-| Auth | JWT (access) + opaque rotating refresh tokens |
-| Logging | structlog (JSON) |
-| Testing | pytest, pytest-asyncio, httpx |
-| Lint / format / types | ruff, black, mypy (strict) |
-| Containerization | Docker, Docker Compose |
-| CI | GitHub Actions |
-
-## Project Structure
-
-```
-fintrack/
-├── app/
-│   ├── main.py          # app factory, middleware/router registration
-│   ├── core/             # config, logging, centralized exceptions, request context
-│   ├── api/               # routers (HTTP concern only)
-│   ├── middleware/        # request-id/logging, security headers
-│   ├── db/                # SQLAlchemy engine/session setup
-│   ├── models/             # SQLAlchemy ORM models - 18 tables
-│   ├── utils/               # money/decimal/period helpers
-│   ├── schemas/               # Pydantic request/response models
-│   ├── services/                # business logic, incl. goal_math.py and
-│   │                            # recurring_math.py - pure, deterministic
-│   │                            # calculations (no I/O, no clock access)
-│   ├── repositories/              # data access, one module per aggregate
-│   └── workers/                     # celery_app.py + tasks.py (Stage 7)
-├── tests/
-│   ├── unit/           # business logic, no I/O (incl. security.py, config)
-│   ├── integration/     # real PostgreSQL - migrations, connectivity, transfer
-│   │                    # atomicity/concurrency, and recurring idempotency
-│   ├── helpers.py       # shared register/login/account test helpers
-│   └── api/               # HTTP behavior via httpx (most flows use a real,
-│                          # per-test-transaction PostgreSQL - see conftest.py)
-├── alembic/             # env.py + versions/ - migrations (Stage 2+)
-├── docs/                # requirements, architecture, API/DB design
-├── scripts/
-├── Dockerfile
-├── docker-compose.yml
-├── pyproject.toml
-└── .env.example
-```
-
-## Local Setup
+## 2. Quick start
 
 Requires Python 3.12+ and Docker.
 
@@ -119,222 +53,22 @@ Requires Python 3.12+ and Docker.
 python -m venv .venv
 # Windows: .venv\Scripts\activate | macOS/Linux: source .venv/bin/activate
 pip install -e ".[dev]"
-cp .env.example .env   # edit values as needed
+cp .env.example .env               # edit values as needed, especially FINTRACK_JWT_SECRET_KEY
+
+docker compose up --build          # Postgres, Redis, API, Celery worker, Celery beat
+docker compose run --rm api alembic upgrade head
 ```
 
-## Environment Variables
+Default host ports (deliberately non-standard, to avoid clashing with
+other local services): API `8010`, PostgreSQL `55432`, Redis `6379`.
+Containers reach each other on their normal ports (`db:5432`, etc.) —
+only the host-side mapping is shifted. Adjust `docker-compose.yml` if
+you'd rather use the conventional ports.
 
-See [`.env.example`](.env.example) for the full list. Key variables:
-
-| Variable | Purpose |
-|---|---|
-| `FINTRACK_ENVIRONMENT` | `development` \| `testing` \| `production` |
-| `FINTRACK_DATABASE_URL` | Async SQLAlchemy PostgreSQL URL |
-| `FINTRACK_CORS_ORIGINS` | Comma-separated allowed origins (no `*` in production) |
-| `FINTRACK_LOG_LEVEL` | Log verbosity |
-
-Settings are loaded via `pydantic-settings` and fail fast at startup if a
-required variable is missing.
-
-## Database Setup & Migrations
-
-Schema is fully managed by Alembic — see
-[`docs/database-design.md`](docs/database-design.md) for the design and
-[`app/models/`](app/models/) for the SQLAlchemy models. `alembic/env.py`
-reads `FINTRACK_DATABASE_URL` from the same `Settings` the app uses, so
-there's one source of truth for the DB URL, not a second copy in
-`alembic.ini`.
-
-```bash
-alembic upgrade head        # apply all migrations
-alembic downgrade base      # roll back to empty (used to verify migrations)
-alembic revision --autogenerate -m "add X"   # generate a new migration after model changes
-```
-
-Autogenerated migrations are always hand-reviewed before commit —
-autogenerate does not reliably capture `CHECK` constraints, partial
-indexes, or circular foreign keys (this project has one: `transactions`
-and `recurring_occurrences` reference each other, requiring `use_alter`
-and a hand-added deferred `op.create_foreign_key()` pair — see the
-initial migration for the pattern and `docs/database-design.md` §6 for
-why the cycle exists).
-
-One migration (`308509395ce3_seed_system_categories`) is data-only — it
-seeds the system default categories (FR-CAT-01) rather than changing the
-schema. Its `upgrade()` uses `op.bulk_insert`; the `type` column must be
-declared as the real `category_type` enum there (not a plain string), or
-asyncpg's parameter binding fails with a type-mismatch error at insert
-time even though the value looks like valid enum text.
-
-Current migration chain: initial schema → password reset tokens →
-`users.locked_until` (auto-expiring lockout, added during Stage 3) → seed
-system categories (added during Stage 5, since transactions require a
-category).
-
-## Running the App Locally (without Docker)
-
-Requires a reachable PostgreSQL instance matching `FINTRACK_DATABASE_URL`.
-
-```bash
-uvicorn app.main:create_app --factory --reload
-```
-
-- Liveness: `GET http://localhost:8000/health`
-- Readiness: `GET http://localhost:8000/ready`
-- OpenAPI docs: `http://localhost:8000/docs`
-
-## Docker Setup
-
-```bash
-docker compose up --build
-docker compose run --rm api alembic upgrade head   # apply migrations
-```
-
-Brings up PostgreSQL, Redis, and the API. Postgres and Redis have
-healthchecks; the API waits for both before starting. Migrations are run
-explicitly, not automatically on container boot — auto-migrating on every
-replica's startup risks multiple instances racing the same migration in a
-multi-replica deployment.
-
-Default host port mappings (only affect access *from the host* — containers
-always reach each other over the compose network on the service's normal
-port, e.g. `db:5432`): API on `8010`, PostgreSQL on `55432`, Redis on
-`6379`. The API and Postgres ports are deliberately non-default (`8000`/
-`5432`) to avoid clashing with other services commonly already running on a
-dev machine; adjust the `ports:` mappings in
-[`docker-compose.yml`](docker-compose.yml) if you'd prefer the conventional
-ports and they're free on yours. With the defaults: `http://localhost:8010/health`,
-`http://localhost:8010/ready`, `http://localhost:8010/docs`.
-
-## Redis, Caching, Rate Limiting & Idempotency
-
-Redis backs four things, each failing open if Redis is down (requests still
-succeed, the failure is logged):
-
-- **Rate limiting** on login, register, refresh, forgot/reset-password (fixed
-  window per client IP; `FINTRACK_RATE_LIMIT_AUTH_PER_MINUTE`, default 10).
-- **Report caching** for the monthly summary and balances, namespaced per user.
-  Every ledger write invalidates the user's cached reports, including writes
-  made by the background worker.
-- **Idempotency keys** on `POST /transactions`, `POST /transfers`, and CSV
-  confirm. A repeated `Idempotency-Key` replays the stored response instead of
-  posting twice. A concurrent duplicate gets `409 IDEMPOTENCY_IN_PROGRESS`.
-
-## Background Jobs
-
-`docker compose up` also starts `worker` (Celery worker) and `beat`
-(Celery beat scheduler) — see
-[`docs/architecture/background-jobs.md`](docs/architecture/background-jobs.md).
-Both reuse the `api` image (same `Dockerfile`, no separate build) and run
-as the same non-root container user, which is why `beat` points its
-schedule file at `/tmp/celerybeat-schedule` instead of the app directory
-— the app directory isn't writable by that user, by design.
-
-Currently one scheduled task: `process_due_recurring_rules_task`, which
-`beat` fires daily at 00:15 UTC and which is idempotent by construction
-(see Stage 7 notes below) — safe to re-run, retry, or trigger manually:
-
-```bash
-docker compose exec worker celery -A app.workers.celery_app call \
-  app.workers.tasks.process_due_recurring_rules_task
-docker compose logs worker --tail 20
-```
-
-## Running Tests
-
-```bash
-pytest                 # unit tests + platform/health API tests (no external services)
-```
-
-Tests that need a real PostgreSQL (DB-backed API tests — auth, users — and
-the `tests/integration/` suite) are skipped unless
-`FINTRACK_TEST_DATABASE_URL` is set:
-
-```bash
-FINTRACK_TEST_DATABASE_URL=postgresql+asyncpg://fintrack:change-me@localhost:55432/fintrack pytest
-```
-
-(Port `55432` matches the default `docker-compose.yml` mapping — see
-Docker Setup above. Adjust if you changed it or are pointing at a
-different PostgreSQL instance.)
-
-DB-backed tests run against the real schema but stay isolated from each
-other: each test gets one connection/transaction that's rolled back
-afterwards, using SQLAlchemy's `join_transaction_mode="create_savepoint"`
-so a service's own internal `commit()` calls don't end the outer
-transaction early — see the `db_session` fixture in `tests/conftest.py`.
-
-Two tests in `tests/integration/` deliberately break that pattern because
-they need real, separately-committed transactions:
-- `test_transfer_atomicity.py` forces a failure between a transfer's two
-  legs and asserts both account balances are completely untouched
-  (UC-07 alt-flow 4a).
-- `test_transfer_concurrency.py` races ten genuinely concurrent transfers
-  (separate connections) against the same source account and asserts the
-  final balance reflects all ten debits — proving the row lock actually
-  serializes them rather than losing an update (UC-07 alt-flow 4b). Each
-  test cleans up its own rows afterward since nothing here gets rolled
-  back automatically.
-
-Goal progress/required-contribution math (`app/services/goal_math.py`)
-never reads the system clock — `today` is always an explicit parameter.
-`tests/unit/test_goal_math.py` exercises it with fixed dates and exact
-expected `Decimal` outputs (including the achieved/overdue/exact-boundary
-edge cases), independent of whenever the suite happens to run. API-level
-goal tests then only need to confirm the service wires that function up
-correctly, using a far-future/far-past target date to keep the
-overdue/not-overdue branch deterministic without freezing time at the
-HTTP layer.
-
-`tests/integration/test_recurring_idempotency.py` proves UC-09's
-idempotency guarantee directly against the service layer: double-invoking
-`process_occurrence()` for the same `(rule, scheduled_date)` creates
-exactly one transaction, and a simulated crash between the transaction
-insert and its occurrence-row anchor (mocked to raise) leaves zero
-orphaned rows — a retry afterward succeeds cleanly with no duplicate.
-This was also verified against the real, running Celery worker container
-(not just pytest): triggering the task twice in a row for the same due
-rule produced `transactions_created=2` then `transactions_created=0`.
-
-## Code Quality
-
-```bash
-ruff check .
-black --check .
-mypy app
-pip-audit             # dependency vulnerability scan - also runs in CI
-pre-commit install   # run all of the above automatically on commit
-```
-
-## Load Testing
-
-```bash
-locust -f scripts/locustfile.py --host http://localhost:8010 \
-    --headless -u 20 -r 5 -t 45s --csv scripts/locust_results
-```
-
-Simulates realistic traffic against the running `docker compose` stack
-(mostly reads — list transactions/accounts, pull reports — with
-occasional transaction creation). See
-[`docs/performance-review.md`](docs/performance-review.md) §7 for the
-last recorded run's numbers and findings.
-
-## Admin
-
-Admin-only endpoints (`require_admin`, role `ADMIN`) under `/api/v1/admin`:
-list/search/paginate users, lock/unlock a user (idempotent, self-lock
-rejected, lock revokes every active refresh token immediately), and a
-cross-user audit log view. Deliberately narrow — no admin endpoint
-returns another user's financial data, password hash, or active token.
-See [`docs/security-review.md`](docs/security-review.md) §2.
-
-## Authentication
-
-JWT access tokens (15 min default) + opaque, rotating refresh tokens with
-reuse detection — see
-[`docs/architecture/security-architecture.md`](docs/architecture/security-architecture.md)
-§1 for the full design and `docs/architecture/data-flow.md` §6 for the
-token lifecycle. Quick tour once the app is running:
+- Liveness: `GET http://localhost:8010/health`
+- Readiness (checks the DB): `GET http://localhost:8010/ready`
+- Interactive API docs: `http://localhost:8010/docs`
+- Metrics (Prometheus format): `GET http://localhost:8010/metrics`
 
 ```bash
 curl -X POST localhost:8010/api/v1/auth/register -H 'Content-Type: application/json' \
@@ -347,30 +81,296 @@ curl -X POST localhost:8010/api/v1/auth/login -H 'Content-Type: application/json
 curl localhost:8010/api/v1/users/me -H "Authorization: Bearer <access_token>"
 ```
 
-`FINTRACK_JWT_SECRET_KEY` is required (min 32 chars enforced in
-production); generate one with
-`python -c "import secrets; print(secrets.token_urlsafe(48))"`. There is
-no email provider yet (lands in Stage 10), so `/auth/forgot-password`
-logs the raw reset token as a structured log line in non-production
-environments instead of emailing it — never in production, and never as
-the final implementation.
+To run the API without Docker (needs a reachable PostgreSQL matching
+`FINTRACK_DATABASE_URL`):
 
-## API Documentation
+```bash
+uvicorn app.main:create_app --factory --reload
+```
 
-Full endpoint-by-endpoint contract: [`docs/api-design.md`](docs/api-design.md).
-Interactive Swagger UI is served at `/docs` once the app is running.
+## 3. Architecture
 
-## Deployment
+Layered modular monolith — one deployable, four internal layers, each
+only allowed to call the layer directly below it:
 
-Not yet built — see Stage 15 in
-[`docs/06-development-roadmap.md`](docs/06-development-roadmap.md). AWS
-deployment details will live in `docs/deployment.md` once that stage
-starts.
+```
+Router (app/api)        HTTP only: parse request, call one service method, shape response
+   │
+Service (app/services)  Business rules, transaction boundaries, orchestration
+   │
+Repository (app/repositories)  Query construction, nothing else
+   │
+Model (app/models)      SQLAlchemy ORM tables
+```
 
-## Future Improvements
+```
+Client → FastAPI (app/main.py)
+              ├── PostgreSQL          (source of truth — every table)
+              ├── Redis               (cache / rate limit / idempotency / Celery broker)
+              └── Celery worker+beat  (recurring-transaction posting, async CSV import)
+```
 
-Documented, deliberately out of scope for v1 — see
-[`docs/01-product-requirements.md`](docs/01-product-requirements.md) §6
-and the "explicitly out of scope" notes throughout `docs/architecture/`:
-multi-currency FX conversion, bank aggregation (Plaid-style), joint/shared
-accounts, distributed tracing, read replicas.
+Why this shape, not microservices: a single user's request (e.g.
+"create a transfer") touches accounts, transactions, budgets, and
+notifications in one atomic unit of work. Splitting those into
+separate services would turn one DB transaction into a distributed one
+for no benefit at this scale. Full rationale and diagrams:
+[`docs/architecture/system-architecture.md`](docs/architecture/system-architecture.md).
+
+A few design decisions worth knowing before reading the code:
+
+- **Money is always `Decimal`/`NUMERIC(18,2)`, never `float`.** A float
+  balance is a silent-corruption bug waiting to happen; see
+  `app/utils/money.py`.
+- **Ownership is enforced in the repository's `WHERE` clause**, not
+  just checked in the service. Every `get_owned_*` query filters by
+  `user_id` directly, so there's no code path that *could* return
+  another user's row even by accident. Cross-user access returns `404`
+  (not `403`) everywhere, so a user can't even tell whether a resource
+  ID belongs to someone else.
+- **Transfers use `SELECT ... FOR UPDATE`** on both accounts before
+  touching either balance, so concurrent transfers against the same
+  account serialize instead of losing an update. Verified with a real
+  10-way-concurrent test, not just a forced-delay unit test.
+- **Recurring-transaction idempotency is a database constraint**, not
+  an application-level check-then-insert: a unique constraint on
+  `(recurring_rule_id, scheduled_date)` makes "process this occurrence
+  twice" fail at the DB, not just "usually not happen."
+- **Math that depends on "today" (goal progress, recurring due-dates)
+  never calls the system clock.** `app/services/goal_math.py` and
+  `app/services/recurring_math.py` take `today` as an explicit
+  parameter, which is what makes their tests exact and reproducible
+  instead of "probably right, ran when I wrote it."
+- **Redis-backed features (cache, rate limit, idempotency keys) fail
+  open.** If Redis is unreachable, requests still succeed — correctness
+  never depends on Redis being up; it's purely an optimization/defense
+  layer.
+
+## 4. Code layout
+
+```
+app/
+├── main.py              # app factory: middleware + router registration
+├── core/                # config (pydantic-settings), structlog setup, JWT/password
+│                         # hashing, centralized exception→HTTP mapping, Redis client,
+│                         # cache, rate limiter, idempotency, Prometheus metrics
+├── middleware/           # request-id injection + JSON request logging, security headers
+├── db/                    # async SQLAlchemy engine/session factory
+├── models/                 # SQLAlchemy ORM tables (users, accounts, transactions,
+│                           # transfers, categories, budgets, goals + contributions,
+│                           # recurring rules + occurrences, CSV import batches,
+│                           # notifications, audit log, refresh/reset tokens)
+├── schemas/                 # Pydantic v2 request/response models — one module per resource
+├── api/v1/                   # routers: one module per resource, HTTP concern only
+├── services/                   # business logic + transaction boundaries, one per resource;
+│                               # goal_math.py / recurring_math.py are pure functions
+├── repositories/                 # query construction, one module per aggregate,
+│                                 # ownership-scoped at the query level
+└── workers/                       # celery_app.py (broker/config) + tasks.py (recurring
+                                    # posting, async CSV processing)
+
+tests/
+├── unit/        # pure logic, no I/O: security, config, money, goal/recurring math,
+│                # audit-log metadata allowlist
+├── integration/ # against a real PostgreSQL: migrations, transfer atomicity/concurrency,
+│                # recurring idempotency (incl. against the real running Celery worker),
+│                # Redis-backed features
+└── api/         # full HTTP behavior via httpx, one module per resource, plus a
+                 # cross-cutting security matrix (every protected route × unauthenticated/
+                 # malformed-token/cross-user-access)
+
+alembic/        # migrations — one source of truth for schema, no manual DDL anywhere
+docs/           # requirements, architecture, API/DB design, and the review docs below
+scripts/        # locustfile.py (load test)
+```
+
+296 tests total, run against a real Postgres/Redis/Celery stack, not
+mocks — `pytest` by itself runs what doesn't need external services;
+see [§7](#7-running-tests) for the full command.
+
+## 5. Core functionality, by resource
+
+| Resource | What it does | Key internal detail |
+|---|---|---|
+| **Auth** (`/auth`) | Register, login, refresh, logout, forgot/reset password | Opaque refresh tokens, hashed at rest, rotated on every use; reusing an already-rotated token revokes its entire token family (reuse-detection, not just rotation). Account lockout after repeated failed logins. |
+| **Users** (`/users`) | Read/update own profile | — |
+| **Accounts** (`/accounts`) | CRUD for ledgers (bank/cash/credit-card/savings/investment/wallet) | Credit-card accounts alone are allowed a negative balance; everything else is a business-rule violation, not a UI-only guard. |
+| **Categories** (`/categories`) | System-seeded + user-defined spending categories | System categories are seeded by a data-only Alembic migration, not app-startup code. |
+| **Transactions** (`/transactions`) | Income/expense entries | Supports an `Idempotency-Key` header so a retried POST can't double-post. |
+| **Transfers** (`/transfers`) | Move money between two of the user's own accounts | Atomic: both legs succeed or neither does, enforced with row-level locks, not just a try/except. |
+| **Budgets** (`/budgets`) | Per-category monthly spending limits | Utilization is computed from actual transactions at read time, not a maintained counter that can drift. |
+| **Goals** (`/goals`) | Savings targets with progress tracking | Progress/required-contribution math is a pure, clock-free function — see §3. |
+| **Recurring transactions** (`/recurring-transactions`) | Rules that generate transactions on a schedule | Posted by a daily Celery Beat job; idempotent by a DB constraint, not application logic. |
+| **CSV import** (`/csv-imports`) | Bulk transaction upload | Structural + per-row validation, duplicate detection, explicit preview→confirm (nothing is written on upload alone); large files are processed asynchronously by the worker. |
+| **Reports** (`/reports`) | Monthly summary, category breakdown, balances, budgets/goals snapshot | Monthly summary and balances are cached in Redis per user, invalidated on every ledger write (including worker-originated ones). |
+| **Notifications** (`/notifications`) | In-app alerts: budget exceeded, goal achieved, recurring posted | Delivery is behind a `DeliveryChannel` protocol; only an in-app/log channel exists today (see §8). |
+| **Audit log** (`/audit`) | Read your own history of sensitive actions | Metadata is allowlisted before write — a password or token passed in by mistake is dropped, not stored. |
+| **Admin** (`/admin`) | List/search users, lock/unlock, cross-user audit view | Gated by `role == ADMIN`; deliberately returns no financial data, password hash, or token for any user — see §6. |
+
+Full request/response contracts: [`docs/api-design.md`](docs/api-design.md),
+or the live Swagger UI at `/docs`.
+
+## 6. Cross-cutting internals
+
+**Authentication & sessions** — JWT access tokens (15 min default,
+minimal claims) + opaque, rotating refresh tokens with reuse detection.
+`FINTRACK_JWT_SECRET_KEY` is required and must be ≥32 chars in
+production (enforced at startup, not just documented); generate one
+with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+Full design: [`docs/architecture/security-architecture.md`](docs/architecture/security-architecture.md) §1.
+
+**Authorization** — every resource is scoped to its owner inside the
+repository's query, and cross-user access always returns `404`. Swept
+end-to-end by `tests/api/test_security_matrix.py`.
+
+**Admin** — `/admin/*` is gated by a `require_admin` dependency
+checking `role == ADMIN` on the current user. It can list/search/
+paginate users and lock or unlock an account (idempotent either way; an
+admin can't lock themselves out). Locking a user immediately revokes
+every refresh token they currently hold — a lock takes effect on their
+next request, not just their next login. Every admin action is
+audit-logged. No admin endpoint exposes another user's transactions,
+balances, password hash, or active token.
+
+**Redis-backed features** — rate limiting (fixed window per client IP
+on login/register/refresh/password-reset), report caching (per-user
+namespaced, invalidated on every ledger write), and idempotency keys
+(`Idempotency-Key` header on `POST /transactions`, `POST /transfers`,
+and CSV confirm — a concurrent duplicate gets `409
+IDEMPOTENCY_IN_PROGRESS`, a sequential replay returns the original
+response). All three fail open if Redis is down.
+
+**Background jobs** — Celery worker + beat, started by `docker compose
+up` alongside the API (same image, different `command:`). One
+scheduled task today: `process_due_recurring_rules_task`, fired daily
+at 00:15 UTC, safe to re-run or trigger manually:
+
+```bash
+docker compose exec worker celery -A app.workers.celery_app call \
+  app.workers.tasks.process_due_recurring_rules_task
+```
+
+**Observability** — structured JSON logs (`structlog`) with a
+request-id propagated through every log line in a request; Prometheus
+metrics at `/metrics` (request count/latency by route template —not raw
+path, to avoid cardinality blowup—, cache hit/miss, rate-limit
+rejections, background job duration/failures); `/health` (liveness, no
+dependency checks) and `/ready` (checks the DB) for orchestrator
+probes.
+
+**Database & migrations** — schema is entirely Alembic-managed; see
+[`docs/database-design.md`](docs/database-design.md) and
+[`app/models/`](app/models/). `alembic/env.py` reads the DB URL from
+the same `Settings` object the app uses, so there's one source of
+truth, not a second copy in `alembic.ini`.
+
+```bash
+alembic upgrade head        # apply all migrations
+alembic downgrade base      # roll back to empty
+alembic revision --autogenerate -m "add X"
+```
+
+Autogenerated migrations are always hand-reviewed — autogenerate
+doesn't reliably capture `CHECK` constraints, partial indexes, or
+circular foreign keys (this schema has one: `transactions` and
+`recurring_occurrences` reference each other, requiring `use_alter`
+and a hand-added deferred `op.create_foreign_key()` pair). One
+migration is data-only — it seeds the system default categories via
+`op.bulk_insert`, with the `type` column declared as the real
+`category_type` enum, not a plain string (asyncpg's binding fails
+otherwise even though the value looks like valid text).
+
+## 7. Running tests
+
+```bash
+pytest                 # unit tests + platform/health API tests (no external services)
+```
+
+Tests that need a real PostgreSQL (most API tests, all of
+`tests/integration/`) are skipped unless `FINTRACK_TEST_DATABASE_URL`
+is set:
+
+```bash
+FINTRACK_TEST_DATABASE_URL=postgresql+asyncpg://fintrack:change-me@localhost:55432/fintrack pytest
+```
+
+DB-backed tests run against the real schema but stay isolated from
+each other: each test gets one connection/transaction rolled back
+afterward, using SQLAlchemy's `join_transaction_mode="create_savepoint"`
+so a service's own internal `commit()` releases a savepoint instead of
+ending the outer transaction — see the `db_session` fixture in
+`tests/conftest.py`. `test_transfer_atomicity.py` and
+`test_transfer_concurrency.py` deliberately break that pattern (they
+need real, separately committed transactions to prove what they're
+proving) and clean up their own rows afterward.
+
+```bash
+ruff check .
+black --check .
+mypy app
+pip-audit                    # dependency vulnerability scan — also runs in CI
+pre-commit install           # run all of the above automatically on commit
+```
+
+```bash
+locust -f scripts/locustfile.py --host http://localhost:8010 \
+    --headless -u 20 -r 5 -t 45s --csv scripts/locust_results
+```
+
+Load test against the running `docker compose` stack — see
+[`docs/performance-review.md`](docs/performance-review.md) §7 for the
+last recorded run and findings.
+
+## 8. Known limitations & next improvements
+
+Honestly tracked, not hidden — see
+[`docs/production-readiness.md`](docs/production-readiness.md) for the
+full item-by-item review this list is drawn from.
+
+**Not yet deployed anywhere.** No cloud account or hosted CI runner is
+reachable from this environment, so `.github/workflows/ci.yml` has
+been validated by running every one of its steps locally, but never on
+an actual GitHub Actions runner, and `docs/deployment.md` documents an
+AWS target that has never been provisioned. This is the single largest
+gap between "done" and "in production."
+
+**Report cache benefit is unproven at demo-scale data.** Measured
+median latency was within noise (12.1ms cached vs. 13.1ms uncached)
+at this session's small transaction volume. Needs re-measuring against
+a few thousand transactions per user before trusting the cache is
+earning its complexity — see `docs/performance-review.md` §6.
+
+**One load-test finding not yet investigated.** `POST /accounts`
+showed a ~1s median under a 20-user burst, markedly slower than the
+structurally similar `POST /transactions` (~68ms). Only 8 samples were
+collected, so it isn't conclusive — flagged for profiling, not fixed —
+see `docs/performance-review.md` §7.
+
+**Email is a log-only stub.** `/auth/forgot-password` logs the reset
+token as a structured log line instead of emailing it, and in-app
+notifications have no real email delivery behind them. The
+`DeliveryChannel` protocol (`app/services/notification_service.py`) is
+already designed to take a real provider without touching call sites —
+plugging one in is the next step, not a rewrite.
+
+**Deliberately out of scope for this version** — not oversights, see
+[`docs/01-product-requirements.md`](docs/01-product-requirements.md) §6:
+multi-currency FX conversion, bank/account aggregation (Plaid-style),
+joint/shared accounts, distributed tracing, read replicas.
+
+## 9. Technology stack
+
+| Concern | Choice |
+|---|---|
+| API framework | FastAPI (async), Pydantic v2 |
+| Database | PostgreSQL 16, SQLAlchemy 2.x (async), Alembic |
+| Cache / queue broker | Redis |
+| Background jobs | Celery (worker + beat) |
+| Auth | JWT access tokens + opaque rotating refresh tokens |
+| Logging | structlog (JSON) |
+| Testing | pytest, pytest-asyncio, httpx |
+| Lint / format / types | ruff, black, mypy (strict) |
+| Dependency scanning | pip-audit |
+| Load testing | Locust |
+| Containerization | Docker, Docker Compose |
+| CI | GitHub Actions |
