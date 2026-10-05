@@ -340,23 +340,6 @@ at this session's small transaction volume. Needs re-measuring against
 a few thousand transactions per user before trusting the cache is
 earning its complexity — see `docs/performance-review.md` §6.
 
-**One load-test finding not yet investigated.** `POST /accounts`
-showed a ~1s median under a 20-user burst, markedly slower than the
-structurally similar `POST /transactions` (~68ms). Only 8 samples were
-collected, so it isn't conclusive — flagged for profiling, not fixed —
-see `docs/performance-review.md` §7.
-
-**Email is a log-only stub.** `/auth/forgot-password` logs the reset
-token as a structured log line instead of emailing it, and in-app
-notifications have no real email delivery behind them. The
-`DeliveryChannel` protocol (`app/services/notification_service.py`) is
-already designed to take a real provider without touching call sites —
-plugging one in is the next step, not a rewrite.
-
-**Deliberately out of scope for this version** — not oversights, see
-[`docs/01-product-requirements.md`](docs/01-product-requirements.md) §6:
-multi-currency FX conversion, bank/account aggregation (Plaid-style),
-joint/shared accounts, distributed tracing, read replicas.
 
 ## 9. Technology stack
 
