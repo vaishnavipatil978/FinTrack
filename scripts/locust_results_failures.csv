@@ -1,0 +1,4 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+POST,/api/v1/auth/login,HTTPError('401 Client Error: Unauthorized for url: /api/v1/auth/login'),2,2026-10-05T05:22:15Z,2026-10-05T05:22:15Z
+POST,/api/v1/auth/register,HTTPError('429 Client Error: Too Many Requests for url: /api/v1/auth/register'),17,2026-10-05T05:22:14Z,2026-10-05T05:22:15Z
+POST,/api/v1/auth/login,HTTPError('429 Client Error: Too Many Requests for url: /api/v1/auth/login'),17,2026-10-05T05:22:15Z,2026-10-05T05:22:15Z

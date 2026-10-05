@@ -1,0 +1,1616 @@
+# FinTrack — Production-Grade Personal Finance Management Platform
+
+You are a **Senior Python Backend Engineer, Solution Architect, DevOps Engineer, and Code Reviewer**.
+
+Your task is to design and build a **production-ready personal finance management platform called FinTrack**.
+
+This is NOT a toy project, CRUD demo, tutorial project, or proof of concept.
+
+The final application should demonstrate that a professional backend engineer can design, develop, test, secure, containerize, monitor, document, and deploy a real-world FastAPI application.
+
+---
+
+# 1. PRIMARY OBJECTIVE
+
+Build a production-grade personal finance management platform where users can securely manage their financial information.
+
+The application should support:
+
+* User registration and authentication
+* JWT-based authentication
+* Refresh tokens
+* User profile management
+* Multiple financial accounts
+* Income and expense transactions
+* Transfers between accounts
+* Transaction categories
+* Budgets
+* Financial goals
+* Recurring transactions
+* Monthly financial summaries
+* Transaction search/filtering/sorting
+* CSV transaction import
+* Notifications
+* Audit logging
+* Background processing
+* Rate limiting
+* Caching
+* API documentation
+* Observability
+* Automated testing
+* Dockerized deployment
+* CI/CD
+* Production configuration
+
+Do NOT add AI features.
+
+This project is specifically intended to demonstrate **strong Python + FastAPI backend engineering**.
+
+---
+
+# 2. DEVELOPMENT PHILOSOPHY
+
+Do NOT immediately start writing application code.
+
+The development must happen in clearly defined stages.
+
+First understand the complete system.
+
+Then produce the architecture and design documents.
+
+Then implement the application incrementally.
+
+At every stage:
+
+1. Explain what is being built.
+2. Explain why it is required.
+3. Define acceptance criteria.
+4. Implement it.
+5. Test it.
+6. Review it.
+7. Only then move to the next stage.
+
+Never silently skip a stage.
+
+Do not build the entire application in one huge implementation.
+
+---
+
+# 3. PHASE 0 — REQUIREMENTS & PROJECT DEFINITION
+
+Before writing code, create:
+
+```text
+docs/
+├── 01-product-requirements.md
+├── 02-functional-requirements.md
+├── 03-non-functional-requirements.md
+├── 04-user-stories.md
+├── 05-use-cases.md
+└── 06-development-roadmap.md
+```
+
+Document:
+
+### Users
+
+Define the primary user types.
+
+At minimum:
+
+```text
+USER
+ADMIN
+```
+
+### Core user journeys
+
+Document flows such as:
+
+```text
+Registration
+    ↓
+Email verification
+    ↓
+Login
+    ↓
+Create account
+    ↓
+Add transaction
+    ↓
+View balance
+    ↓
+Create budget
+    ↓
+Track spending
+```
+
+Also document:
+
+```text
+Create recurring transaction
+Import transactions
+Transfer money
+Create financial goal
+Generate monthly report
+```
+
+---
+
+# 4. NON-FUNCTIONAL REQUIREMENTS
+
+Define realistic production requirements.
+
+Include:
+
+### Performance
+
+Define reasonable targets for:
+
+* API response time
+* database queries
+* pagination
+* concurrent requests
+
+Do not invent unrealistic enterprise numbers.
+
+### Availability
+
+Define expected availability and graceful degradation behavior.
+
+### Security
+
+Cover:
+
+* password security
+* JWT security
+* refresh-token security
+* authorization
+* input validation
+* SQL injection prevention
+* rate limiting
+* CORS
+* secure headers
+* secrets management
+* sensitive-data handling
+
+### Reliability
+
+Cover:
+
+* database transactions
+* idempotency
+* retries
+* failure handling
+* background job failures
+* duplicate requests
+
+### Maintainability
+
+The application must use:
+
+* clean architecture
+* separation of concerns
+* type hints
+* Pydantic schemas
+* service layer
+* repository/data-access layer where appropriate
+* dependency injection
+* centralized error handling
+
+---
+
+# 5. ARCHITECTURE DESIGN
+
+Before implementation, create:
+
+```text
+docs/
+└── architecture/
+    ├── system-architecture.md
+    ├── component-architecture.md
+    ├── data-flow.md
+    ├── security-architecture.md
+    ├── caching-strategy.md
+    ├── background-jobs.md
+    └── observability.md
+```
+
+Design the system around:
+
+```text
+Client
+   ↓
+FastAPI
+   ↓
+API Layer
+   ↓
+Service Layer
+   ↓
+Repository / Data Access
+   ↓
+PostgreSQL
+```
+
+Supporting infrastructure:
+
+```text
+FastAPI
+ ├── PostgreSQL
+ ├── Redis
+ ├── Background Worker
+ └── Notification System
+```
+
+Explain why each component exists.
+
+Do not introduce microservices unless there is a genuine reason.
+
+This application should initially be a **well-structured modular monolith**.
+
+---
+
+# 6. DATABASE DESIGN
+
+Use:
+
+```text
+PostgreSQL
+SQLAlchemy
+Alembic
+```
+
+Design the complete database schema before implementing business logic.
+
+Potential entities:
+
+```text
+User
+Account
+Category
+Transaction
+Transfer
+Budget
+BudgetCategory
+FinancialGoal
+RecurringTransaction
+Notification
+AuditLog
+RefreshToken
+```
+
+Create:
+
+```text
+docs/database-design.md
+```
+
+Include:
+
+* entities
+* relationships
+* primary keys
+* foreign keys
+* indexes
+* unique constraints
+* check constraints
+* nullable/non-nullable fields
+* timestamps
+* soft deletion strategy where appropriate
+
+Create an ER diagram using Mermaid.
+
+Example:
+
+```mermaid
+erDiagram
+    USER ||--o{ ACCOUNT : owns
+    USER ||--o{ TRANSACTION : creates
+    ACCOUNT ||--o{ TRANSACTION : contains
+```
+
+Do not blindly follow this example. Modify the schema based on the actual requirements.
+
+---
+
+# 7. MONEY & FINANCIAL DATA
+
+Treat financial data carefully.
+
+Never use floating-point numbers for monetary calculations.
+
+Use an appropriate decimal/numeric representation.
+
+Clearly define:
+
+```text
+currency
+amount
+precision
+rounding
+```
+
+Document how money calculations work.
+
+Support at least:
+
+```text
+INR
+```
+
+but design the system so additional currencies can be introduced later.
+
+---
+
+# 8. API DESIGN
+
+Create:
+
+```text
+docs/api-design.md
+```
+
+Define REST APIs before implementing them.
+
+Use:
+
+```text
+/api/v1/
+```
+
+Example structure:
+
+```text
+/api/v1/auth
+/api/v1/users
+/api/v1/accounts
+/api/v1/transactions
+/api/v1/categories
+/api/v1/budgets
+/api/v1/goals
+/api/v1/recurring-transactions
+/api/v1/reports
+/api/v1/notifications
+```
+
+For every endpoint document:
+
+* HTTP method
+* URL
+* authentication requirement
+* request body
+* query parameters
+* response
+* status codes
+* validation rules
+* possible errors
+
+Use consistent API response and error formats.
+
+---
+
+# 9. AUTHENTICATION & AUTHORIZATION
+
+Implement production-quality authentication.
+
+Features:
+
+```text
+Registration
+Login
+Logout
+Access token
+Refresh token
+Token rotation
+Password hashing
+Password change
+Forgot password flow
+Account lock/rate limiting where appropriate
+```
+
+Use secure password hashing.
+
+Never store plaintext passwords.
+
+Implement authorization so users cannot access another user's financial data.
+
+For every resource, verify ownership.
+
+---
+
+# 10. ACCOUNT MANAGEMENT
+
+Users should be able to create financial accounts such as:
+
+```text
+Bank Account
+Cash
+Credit Card
+Savings
+Investment
+Wallet
+```
+
+Example:
+
+```json
+{
+  "name": "HDFC Salary Account",
+  "type": "BANK",
+  "currency": "INR"
+}
+```
+
+Support:
+
+* create
+* update
+* archive
+* retrieve
+* list
+* balance calculation
+
+Do not allow users to manipulate another user's accounts.
+
+---
+
+# 11. TRANSACTION MANAGEMENT
+
+Support:
+
+```text
+INCOME
+EXPENSE
+TRANSFER
+```
+
+Transactions should contain appropriate information such as:
+
+```text
+amount
+currency
+account
+category
+description
+transaction_date
+merchant
+notes
+```
+
+Implement:
+
+* create transaction
+* update transaction
+* delete/archive transaction
+* list transactions
+* filtering
+* pagination
+* sorting
+* date-range filtering
+* category filtering
+* account filtering
+
+Use proper database transactions where multiple records must change atomically.
+
+---
+
+# 12. TRANSFERS
+
+Transfers require special attention.
+
+Example:
+
+```text
+HDFC Account
+₹10,000
+      ↓
+SBI Account
+```
+
+The operation should update both accounts atomically.
+
+If one side fails, the entire operation must roll back.
+
+Demonstrate proper database transaction management.
+
+---
+
+# 13. BUDGETS
+
+Allow users to create budgets.
+
+Example:
+
+```text
+Food
+Monthly Budget: ₹15,000
+
+Current Spending: ₹11,500
+
+Remaining: ₹3,500
+```
+
+Support:
+
+* monthly budgets
+* category-based budgets
+* budget utilization
+* overspending detection
+* budget summaries
+
+---
+
+# 14. FINANCIAL GOALS
+
+Users can create goals:
+
+```text
+Goal:
+Emergency Fund
+
+Target:
+₹3,00,000
+
+Current:
+₹1,25,000
+
+Target Date:
+2027-12-31
+```
+
+Calculate:
+
+* progress
+* remaining amount
+* target date
+* required monthly contribution
+
+Keep financial calculations deterministic and testable.
+
+---
+
+# 15. RECURRING TRANSACTIONS
+
+Support recurring transactions:
+
+```text
+Rent
+Salary
+Subscriptions
+EMI
+Insurance
+```
+
+Example:
+
+```text
+Rent
+₹25,000
+Monthly
+5th of every month
+```
+
+Use a background worker to process due recurring transactions.
+
+Ensure the job is **idempotent**.
+
+A worker retry must not create duplicate transactions.
+
+---
+
+# 16. CSV IMPORT
+
+Allow users to upload transaction CSV files.
+
+Example:
+
+```text
+date,description,amount,type,category
+2026-09-01,Salary,100000,INCOME,Salary
+2026-09-02,Amazon,2500,EXPENSE,Shopping
+```
+
+Implement:
+
+```text
+Upload
+ ↓
+Validate
+ ↓
+Parse
+ ↓
+Preview
+ ↓
+Import
+ ↓
+Report errors
+```
+
+Do not blindly import everything.
+
+Provide validation and meaningful import errors.
+
+For large files, consider background processing.
+
+---
+
+# 17. REPORTING
+
+Provide APIs for:
+
+```text
+Monthly income
+Monthly expenses
+Savings
+Category spending
+Account balances
+Budget utilization
+Financial goal progress
+```
+
+Example:
+
+```text
+September 2026
+
+Income:     ₹1,00,000
+Expenses:   ₹62,000
+Savings:    ₹38,000
+
+Top category:
+Food — ₹14,500
+```
+
+Do not hard-code these calculations.
+
+Build proper query/service logic.
+
+---
+
+# 18. REDIS
+
+Use Redis only where it provides a real benefit.
+
+Implement at least:
+
+### Caching
+
+Cache suitable read-heavy information.
+
+### Rate limiting
+
+Protect authentication and sensitive endpoints.
+
+### Idempotency
+
+Use idempotency keys for appropriate operations.
+
+Document:
+
+```text
+What is cached?
+Why?
+TTL?
+Invalidation strategy?
+```
+
+---
+
+# 19. BACKGROUND JOBS
+
+Introduce a background worker system.
+
+Use an appropriate Python solution such as:
+
+```text
+Celery + Redis
+```
+
+or another well-supported task queue.
+
+Use it for:
+
+* recurring transactions
+* notifications
+* CSV processing
+* periodic financial summaries
+
+Implement:
+
+* retries
+* exponential backoff where appropriate
+* failure handling
+* job logging
+* idempotency
+
+---
+
+# 20. NOTIFICATIONS
+
+Create a notification abstraction.
+
+For example:
+
+```text
+NotificationService
+       │
+       ├── EmailNotification
+       └── InAppNotification
+```
+
+Do not tightly couple business logic to an email provider.
+
+Use interfaces/abstractions where appropriate.
+
+---
+
+# 21. AUDIT LOGGING
+
+Record security-sensitive and important operations.
+
+Examples:
+
+```text
+LOGIN
+LOGOUT
+PASSWORD_CHANGED
+ACCOUNT_CREATED
+TRANSACTION_CREATED
+TRANSACTION_UPDATED
+TRANSACTION_DELETED
+BUDGET_CREATED
+```
+
+Audit logs should contain appropriate metadata but must not expose sensitive information such as passwords or tokens.
+
+---
+
+# 22. ERROR HANDLING
+
+Create centralized exception handling.
+
+Use consistent error responses.
+
+Example:
+
+```json
+{
+  "error": {
+    "code": "ACCOUNT_NOT_FOUND",
+    "message": "The requested account was not found",
+    "request_id": "..."
+  }
+}
+```
+
+Do not leak internal stack traces to clients.
+
+---
+
+# 23. OBSERVABILITY
+
+Implement production observability.
+
+At minimum:
+
+### Structured logging
+
+Include:
+
+```text
+timestamp
+request_id
+user_id where appropriate
+endpoint
+status_code
+duration
+error
+```
+
+### Health checks
+
+```text
+GET /health
+GET /ready
+```
+
+Distinguish basic liveness from readiness.
+
+### Metrics
+
+Expose useful application metrics such as:
+
+```text
+request count
+request latency
+error count
+database connection health
+background job failures
+```
+
+Use Prometheus-compatible metrics.
+
+---
+
+# 24. API DOCUMENTATION
+
+FastAPI's OpenAPI documentation should be clean and useful.
+
+Add:
+
+* endpoint descriptions
+* request examples
+* response examples
+* tags
+* authentication documentation
+* error documentation
+
+Do not leave the generated Swagger documentation completely unexplained.
+
+---
+
+# 25. TESTING STRATEGY
+
+Create a comprehensive testing strategy.
+
+Use:
+
+```text
+pytest
+pytest-asyncio
+```
+
+where appropriate.
+
+Test:
+
+### Unit
+
+Business logic.
+
+### Integration
+
+Database and Redis interactions.
+
+### API
+
+HTTP endpoints.
+
+### Security
+
+* unauthorized requests
+* invalid tokens
+* expired tokens
+* cross-user access
+* malformed input
+
+### Concurrency
+
+Test important race-condition scenarios.
+
+### Background jobs
+
+Test retries and idempotency.
+
+Aim for **meaningful coverage**, not artificial 100% coverage.
+
+---
+
+# 26. CODE QUALITY
+
+Use:
+
+```text
+ruff
+black
+mypy
+pre-commit
+```
+
+or an equivalent modern Python tooling setup.
+
+Enforce:
+
+* formatting
+* linting
+* type checking
+* import consistency
+* reasonable complexity
+
+Use Python type hints throughout the codebase.
+
+---
+
+# 27. PROJECT STRUCTURE
+
+Do not put the entire application inside one `main.py`.
+
+Use a maintainable structure similar to:
+
+```text
+fintrack/
+│
+├── app/
+│   ├── main.py
+│   ├── core/
+│   ├── api/
+│   ├── models/
+│   ├── schemas/
+│   ├── services/
+│   ├── repositories/
+│   ├── db/
+│   ├── workers/
+│   ├── middleware/
+│   └── utils/
+│
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── api/
+│
+├── alembic/
+│
+├── docs/
+│
+├── scripts/
+│
+├── docker/
+│
+├── .github/
+│   └── workflows/
+│
+├── Dockerfile
+├── docker-compose.yml
+├── pyproject.toml
+├── .env.example
+└── README.md
+```
+
+Adjust this structure if a better architecture is justified.
+
+Do not create folders simply for the sake of having many folders.
+
+---
+
+# 28. CONFIGURATION
+
+Never hard-code:
+
+```text
+database passwords
+JWT secrets
+API keys
+email credentials
+Redis credentials
+```
+
+Use environment variables.
+
+Create:
+
+```text
+.env.example
+```
+
+Separate configuration for:
+
+```text
+development
+testing
+production
+```
+
+---
+
+# 29. DOCKER
+
+Create production-aware Docker configuration.
+
+At minimum:
+
+```text
+FastAPI
+PostgreSQL
+Redis
+Worker
+```
+
+Use Docker Compose for local development.
+
+The application should be reproducible with a clean environment.
+
+---
+
+# 30. CI/CD
+
+Create a GitHub Actions pipeline.
+
+On pull request:
+
+```text
+Install dependencies
+      ↓
+Lint
+      ↓
+Type check
+      ↓
+Unit tests
+      ↓
+Integration tests
+```
+
+On deployment:
+
+```text
+Build
+ ↓
+Test
+ ↓
+Build Docker image
+ ↓
+Push image
+ ↓
+Deploy
+```
+
+Do not claim a deployment is production-ready until the deployment process has actually been tested.
+
+---
+
+# 31. DEPLOYMENT
+
+Prepare the application for AWS deployment.
+
+Choose an appropriate deployment architecture.
+
+For example:
+
+```text
+Internet
+   ↓
+Load Balancer
+   ↓
+FastAPI containers
+   ↓
+PostgreSQL
+   ↓
+Redis
+```
+
+You may choose another AWS architecture if you can justify it.
+
+Document:
+
+* infrastructure
+* environment variables
+* networking
+* database
+* deployment
+* migrations
+* rollback
+* logging
+* monitoring
+
+Do not unnecessarily over-engineer the first deployment.
+
+---
+
+# 32. SECURITY REVIEW
+
+Before declaring the application complete, perform a security review.
+
+Check:
+
+```text
+Authentication
+Authorization
+Password storage
+JWT handling
+Refresh token handling
+CORS
+CSRF considerations where applicable
+SQL injection
+Input validation
+File upload validation
+Rate limiting
+Secrets
+Sensitive logging
+Dependency vulnerabilities
+```
+
+Create:
+
+```text
+docs/security-review.md
+```
+
+Document identified risks and mitigations.
+
+---
+
+# 33. PERFORMANCE REVIEW
+
+Perform a performance review.
+
+Identify:
+
+* N+1 queries
+* missing indexes
+* unnecessary database calls
+* inefficient pagination
+* excessive serialization
+* blocking operations
+* unnecessary Redis calls
+
+Where appropriate, perform basic load testing.
+
+Use a tool such as:
+
+```text
+Locust
+```
+
+or another appropriate HTTP load-testing tool.
+
+Document findings.
+
+---
+
+# 34. DEVELOPMENT STAGES
+
+The implementation MUST follow stages.
+
+## Stage 1 — Project foundation
+
+Build:
+
+```text
+Repository
+Configuration
+FastAPI application
+Logging
+Health checks
+Docker
+PostgreSQL
+```
+
+Acceptance:
+
+```text
+Application starts successfully.
+Database connects.
+Health endpoint works.
+Docker environment works.
+```
+
+---
+
+## Stage 2 — Database
+
+Implement:
+
+```text
+SQLAlchemy
+Alembic
+Models
+Migrations
+Indexes
+Constraints
+```
+
+Acceptance:
+
+```text
+Fresh database can be created entirely from migrations.
+```
+
+---
+
+## Stage 3 — Authentication
+
+Implement:
+
+```text
+Registration
+Login
+JWT
+Refresh tokens
+Logout
+Password management
+```
+
+Add tests.
+
+---
+
+## Stage 4 — Accounts
+
+Implement account management.
+
+Add tests.
+
+---
+
+## Stage 5 — Transactions
+
+Implement:
+
+```text
+Income
+Expense
+Transfer
+Filtering
+Pagination
+Sorting
+```
+
+Pay special attention to transaction consistency.
+
+---
+
+## Stage 6 — Budgets & Goals
+
+Implement:
+
+```text
+Budgets
+Budget tracking
+Goals
+Goal progress
+```
+
+---
+
+## Stage 7 — Recurring transactions
+
+Implement worker infrastructure.
+
+Test idempotency.
+
+---
+
+## Stage 8 — CSV import
+
+Implement validation, preview and import.
+
+Test malformed files and duplicate imports.
+
+---
+
+## Stage 9 — Redis
+
+Implement:
+
+```text
+Caching
+Rate limiting
+Idempotency
+```
+
+Measure whether caching actually helps.
+
+---
+
+## Stage 10 — Notifications & audit logs
+
+Implement both cleanly without coupling them tightly to business logic.
+
+---
+
+## Stage 11 — Reporting
+
+Implement financial summaries and reporting APIs.
+
+Optimize database queries.
+
+---
+
+## Stage 12 — Testing
+
+Complete:
+
+```text
+Unit
+Integration
+API
+Security
+Concurrency
+Background jobs
+```
+
+---
+
+## Stage 13 — Observability
+
+Implement:
+
+```text
+Structured logs
+Metrics
+Health checks
+Request IDs
+Error tracking approach
+```
+
+---
+
+## Stage 14 — CI/CD
+
+Implement GitHub Actions.
+
+All tests must run automatically.
+
+---
+
+## Stage 15 — Production deployment
+
+Deploy the application.
+
+Verify:
+
+```text
+HTTPS
+Database
+Redis
+Workers
+Migrations
+Logging
+Monitoring
+Environment configuration
+```
+
+---
+
+## Stage 16 — Production readiness review
+
+Do a complete review.
+
+Check:
+
+```text
+Architecture
+Security
+Performance
+Reliability
+Testing
+Observability
+Deployment
+Documentation
+Code quality
+```
+
+Only after passing this review should the project be called:
+
+**Production Ready.**
+
+---
+
+# 35. DOCUMENTATION
+
+The final repository should contain excellent documentation.
+
+Create:
+
+```text
+README.md
+
+docs/
+├── product-requirements.md
+├── functional-requirements.md
+├── non-functional-requirements.md
+├── architecture.md
+├── database-design.md
+├── api-design.md
+├── security.md
+├── testing.md
+├── observability.md
+├── deployment.md
+├── development-roadmap.md
+└── production-readiness.md
+```
+
+README should include:
+
+```text
+Project overview
+Features
+Architecture
+Technology stack
+Project structure
+Local setup
+Environment variables
+Database setup
+Running tests
+Docker setup
+API documentation
+Deployment
+Architecture diagram
+Screenshots if frontend exists
+Future improvements
+```
+
+---
+
+# 36. IMPORTANT ENGINEERING RULES
+
+Follow these rules throughout development.
+
+### Rule 1
+
+Do not blindly generate code.
+
+Think about architecture first.
+
+### Rule 2
+
+Do not over-engineer.
+
+Use the simplest architecture that satisfies the requirement.
+
+### Rule 3
+
+Do not introduce microservices merely to make the project look impressive.
+
+Use a modular monolith.
+
+### Rule 4
+
+Do not use Redis unless there is a clear reason.
+
+### Rule 5
+
+Do not use background jobs for operations that should be synchronous.
+
+### Rule 6
+
+Do not hide errors.
+
+Handle them explicitly.
+
+### Rule 7
+
+Do not sacrifice security for convenience.
+
+### Rule 8
+
+Do not use floating-point arithmetic for money.
+
+### Rule 9
+
+Every important business rule must have tests.
+
+### Rule 10
+
+Every production feature must have documentation.
+
+---
+
+# 37. HOW YOU SHOULD WORK WITH ME
+
+You should work interactively.
+
+Do NOT generate the entire project in a single response.
+
+Start with:
+
+## STEP 1
+
+Create the complete:
+
+```text
+Product Requirements Document
+Functional Requirements
+Non-Functional Requirements
+User Stories
+Use Cases
+Development Roadmap
+```
+
+Then STOP.
+
+Ask me for approval before moving to architecture.
+
+After approval:
+
+## STEP 2
+
+Create:
+
+```text
+System Architecture
+Component Architecture
+Database Design
+API Architecture
+Security Architecture
+Caching Strategy
+Background Job Architecture
+Observability Architecture
+```
+
+Then STOP.
+
+Ask for approval.
+
+Continue this pattern throughout the project.
+
+At every stage, show:
+
+```text
+What we are building
+Why we are building it
+Files to be created/modified
+Implementation approach
+Acceptance criteria
+Testing approach
+```
+
+Then implement.
+
+---
+
+# 38. DEFINITION OF DONE
+
+The project is NOT complete merely because the APIs work locally.
+
+FinTrack is complete only when:
+
+* Application runs locally
+* Docker environment works
+* Database migrations work
+* Authentication works securely
+* Authorization is enforced
+* Core financial operations work
+* Transfers are atomic
+* Recurring transactions are idempotent
+* CSV import is validated
+* Redis is correctly integrated
+* Background jobs work
+* Notifications work
+* Audit logs work
+* API documentation is complete
+* Unit tests exist
+* Integration tests exist
+* API tests exist
+* Security tests exist
+* Important concurrency scenarios are tested
+* Linting passes
+* Type checking passes
+* CI pipeline passes
+* Structured logging works
+* Metrics work
+* Health/readiness endpoints work
+* Docker image builds successfully
+* Production configuration is documented
+* Application is deployed
+* Deployment has been tested
+* Failure scenarios have been tested
+* Security review is complete
+* Performance review is complete
+* README is complete
+* Architecture documentation is complete
+
+Only then mark the project:
+
+**PRODUCTION READY**
+
+---
+
+# FINAL EXPECTATION
+
+Build FinTrack as if it were going to be reviewed by a senior backend engineer during a technical interview.
+
+The goal is not to maximize the number of technologies.
+
+The goal is to demonstrate:
+
+**Good architecture + clean Python + FastAPI expertise + database expertise + security + concurrency + reliability + testing + DevOps + production thinking.**
+
+Do not add AI.
+
+Do not add unnecessary microservices.
+
+Do not skip design.
+
+Do not skip testing.
+
+Do not call something production-ready without actually validating it.

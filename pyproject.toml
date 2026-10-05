@@ -1,0 +1,76 @@
+[project]
+name = "fintrack"
+version = "0.1.0"
+description = "FinTrack - personal finance management API"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn[standard]>=0.30",
+    "pydantic[email]>=2.8",
+    "pydantic-settings>=2.4",
+    "sqlalchemy[asyncio]>=2.0.34",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "structlog>=24.4",
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.9",
+    "celery[redis]>=5.4",
+    "python-multipart>=0.0.12",
+    "redis>=5.0",
+    "prometheus-client>=0.20",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.6",
+    "black>=24.8",
+    "mypy>=1.11",
+    "pre-commit>=3.8",
+    "pip-audit>=2.7",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "C90", "ASYNC"]
+ignore = ["B008"] # FastAPI Depends() in argument defaults is idiomatic
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S107"]
+# Alembic autogenerates these; hand-wrapping generated FK/constraint lines to fit a line
+# length is not worth the diff noise on every future revision.
+"alembic/versions/**" = ["E501", "UP006", "UP007", "UP035", "I001"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# Celery ships no type stubs/py.typed marker.
+module = "celery.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

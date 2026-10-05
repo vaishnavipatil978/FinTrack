@@ -1,0 +1,84 @@
+x-app-env: &app-env
+  FINTRACK_ENVIRONMENT: development
+  FINTRACK_LOG_LEVEL: INFO
+  FINTRACK_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-fintrack}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-fintrack}
+  FINTRACK_CORS_ORIGINS: http://localhost:3000
+  FINTRACK_JWT_SECRET_KEY: ${FINTRACK_JWT_SECRET_KEY:-dev-only-secret-change-me-before-any-real-deploy}
+  FINTRACK_REDIS_URL: redis://redis:6379/0
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fintrack}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-fintrack}
+    ports:
+      - "55432:5432"
+    volumes:
+      - fintrack_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fintrack} -d ${POSTGRES_DB:-fintrack}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: financetrack-api
+    restart: unless-stopped
+    ports:
+      - "8010:8000"
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    image: financetrack-api
+    restart: unless-stopped
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=INFO"]
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  beat:
+    image: financetrack-api
+    restart: unless-stopped
+    command:
+      [
+        "celery", "-A", "app.workers.celery_app", "beat", "--loglevel=INFO",
+        "--schedule=/tmp/celerybeat-schedule",
+      ]
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+volumes:
+  fintrack_pg_data:
